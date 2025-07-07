@@ -16,33 +16,26 @@ export default {
       });
 
       const html = await res.text();
-      let match;
 
-      // If `end` param is provided, match any URL that ends with or includes it (allow trailing query strings)
+      // Match all potential video URLs (mp4, m3u8, etc.)
+      const allMatches = [...html.matchAll(/https?:\/\/[^\s"'<>]+?\.(mp4|m3u8|webm)(\?[^"'<>]*)?/gi)];
+
+      let selectedUrl = null;
+
       if (endsWith) {
-        const regex = new RegExp(`https?:\\/\\/[^"'<>\\s]+${endsWith.replace(/\./g, "\\.")}(\\?[^"'<>\\s]*)?`, "i");
-        match = html.match(regex);
+        // Match the one that ends with given string (like 2160.mp4)
+        selectedUrl = allMatches.find(match => match[0].includes(endsWith));
       }
 
-      // Try matching <source src="..."> for mp4/m3u8
-      if (!match) {
-        match = html.match(/<source[^>]+src="([^"]+\.(mp4|m3u8)[^"]*)"/i);
+      // If no specific one matched, just pick the first one
+      if (!selectedUrl && allMatches.length > 0) {
+        selectedUrl = allMatches[0];
       }
 
-      // Try common video URL patterns
-      if (!match) {
-        match = html.match(/(https?:\/\/[^\s"'<>]+?\.(mp4|m3u8|vid)(\?[^"'<>]*)?)/i);
-      }
+      if (selectedUrl && selectedUrl[0]) {
+        const videoUrl = selectedUrl[0];
 
-      // Final fallback: URLs with query parameters
-      if (!match) {
-        match = html.match(/(https?:\/\/[^\s"'<>]+?\.(php|html|vid)\?[^"'<>]*(v=|id=|file=)[^"'<>]*)/i);
-      }
-
-      if (match && match[0]) {
-        const videoUrl = match[1] || match[0];
-
-        // 🔁 Force a GET request to follow any redirect and get final CDN link
+        // Follow redirects with GET (not HEAD)
         const followRes = await fetch(videoUrl, {
           method: "GET",
           redirect: "follow",
