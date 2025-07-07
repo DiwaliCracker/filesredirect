@@ -2,7 +2,7 @@ export default {
   async fetch(request) {
     const { searchParams } = new URL(request.url);
     const inputUrl = searchParams.get("url");
-    const endsWith = searchParams.get("end"); // e.g., 2160.mp4
+    const endsWith = searchParams.get("end"); // e.g., "2160.mp4"
 
     if (!inputUrl) {
       return new Response("Missing URL", { status: 400 });
@@ -18,9 +18,9 @@ export default {
       const html = await res.text();
       let match;
 
-      // If `end` is provided, look for a URL ending with that string
+      // If `end` param is provided, match any URL that ends with or includes it (allow trailing query strings)
       if (endsWith) {
-        const regex = new RegExp(`https?:\/\/[^"'<>\\s]+${endsWith.replace(/\./g, '\\.')}`, 'i');
+        const regex = new RegExp(`https?:\\/\\/[^"'<>\\s]+${endsWith.replace(/\./g, "\\.")}(\\?[^"'<>\\s]*)?`, "i");
         match = html.match(regex);
       }
 
@@ -29,7 +29,7 @@ export default {
         match = html.match(/<source[^>]+src="([^"]+\.(mp4|m3u8)[^"]*)"/i);
       }
 
-      // Fallback to any video-like URL
+      // Try common video URL patterns
       if (!match) {
         match = html.match(/(https?:\/\/[^\s"'<>]+?\.(mp4|m3u8|vid)(\?[^"'<>]*)?)/i);
       }
@@ -40,11 +40,11 @@ export default {
       }
 
       if (match && match[0]) {
-        const videoUrl = match[0];
+        const videoUrl = match[1] || match[0];
 
-        // 🔁 Fetch to follow redirection and get the final temporary CDN URL
+        // 🔁 Force a GET request to follow any redirect and get final CDN link
         const followRes = await fetch(videoUrl, {
-          method: "HEAD",
+          method: "GET",
           redirect: "follow",
           headers: {
             "User-Agent": "Mozilla/5.0"
@@ -59,7 +59,7 @@ export default {
       return new Response("Video not found", { status: 404 });
 
     } catch (err) {
-      return new Response("Error resolving video: " + err.message, { status: 500 });
+      return new Response("Error: " + err.message, { status: 500 });
     }
   }
 }
